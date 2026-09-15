@@ -133,7 +133,7 @@ function renderAlbum(){
       </div>
       <div style="position:relative;margin-top:10px">
         <iframe id="sunoFrame" src="${esc(x.record.embedUrl)}&loop=0" title="${esc(x.song)}" allow="autoplay; encrypted-media; fullscreen" allowfullscreen style="width:100%;height:152px;border:0;border-radius:9px;display:block"></iframe>
-        <audio id="ttmShadow" src="https://cdn1.suno.ai/${esc(x.record.songId)}.mp3" preload="metadata" style="display:none"></audio>
+        <audio id="ttmShadow" src="https://d2lwuy8qc234o3.cloudfront.net/1/clip/${esc(x.record.songId)}.m4a" preload="metadata" style="display:none"></audio>
         <div id="endOverlay" style="display:none;position:absolute;inset:0;background:rgba(10,6,8,.92);border-radius:9px;flex-direction:column;align-items:center;justify-content:center;gap:10px;cursor:pointer" onclick="if(activeTrack<dealt.length-1){activeTrack++;renderAlbum();}">
           <div style="color:var(--gold);font-size:.7rem;font-weight:900;letter-spacing:.15em;text-transform:uppercase">Song Complete</div>
           <div style="font:400 1.1rem/1 Georgia,serif">Next Track ▶</div>
@@ -154,32 +154,21 @@ function renderAlbum(){
   if(window._ttmTimer) clearTimeout(window._ttmTimer);
   const shadow = document.getElementById('ttmShadow');
   if(shadow){
-    // When shadow audio ends, show overlay
     shadow.onended = ()=>{
-      const ov=$('endOverlay');
-      if(ov){ ov.style.display='flex'; }
+      console.log('Shadow ended — advancing');
+      if(activeTrack < dealt.length - 1){ activeTrack++; renderAlbum(); }
     };
-    // Fallback: poll every 2s — when currentTime is within 1s of duration, trigger
-    if(window._ttmPoll) clearInterval(window._ttmPoll);
-    window._ttmPoll = setInterval(()=>{
-      if(!shadow.duration || isNaN(shadow.duration)) return;
-      if(shadow.currentTime > 0 && (shadow.duration - shadow.currentTime) < 1.5){
-        clearInterval(window._ttmPoll);
-        const ov=$('endOverlay');
-        if(ov && ov.style.display==='none'){ ov.style.display='flex'; }
-      }
-    }, 2000);
-    // Start shadow audio when user clicks the iframe (first play interaction)
+    shadow.onerror = (e)=>{ console.log('Shadow audio error:', e); };
+    shadow.onloadedmetadata = ()=>{ console.log('Shadow duration:', shadow.duration); };
     shadow.load();
     const frame = document.getElementById('sunoFrame');
     if(frame){
       let shadowStarted = false;
       frame.addEventListener('mousedown', ()=>{
-        if(!shadowStarted){ shadowStarted=true; shadow.play().catch(()=>{}); }
+        if(!shadowStarted){ shadowStarted=true; shadow.play().catch(e=>console.log('shadow play err:',e)); }
       });
     }
   }
-  // Watch for Suno's listen_milestone via PerformanceObserver — fires when song completes
   watchForSongEnd(x.record.songId);
 }
 
