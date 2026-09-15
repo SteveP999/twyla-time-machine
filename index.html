@@ -181,26 +181,31 @@ window.addEventListener('message', function(e){
 // When Suno's listen_milestone fires for the current song, we advance
 function watchForSongEnd(songId) {
   if(window._perfObserver) window._perfObserver.disconnect();
+  let imageSeenCount = 0;
   let milestoneCount = 0;
-  const startTime = Date.now();
   window._perfObserver = new PerformanceObserver(function(list) {
     list.getEntries().forEach(function(entry) {
-      if(entry.name && entry.name.includes(songId) && entry.name.includes('listen_milestone')) {
-        milestoneCount++;
-        const elapsed = (Date.now() - startTime) / 1000;
-        console.log('listen_milestone #' + milestoneCount + ' at ' + elapsed.toFixed(0) + 's for', songId);
-        // Only treat as "completed" if at least 60 seconds have passed
-        // (avoids false trigger on rapid early milestones)
-        if(milestoneCount >= 4 && elapsed > 60){
+      // Watch for the song's cover image reloading — happens when song loops
+      if(entry.name && entry.name.includes(songId) && 
+         (entry.name.includes('.jpeg') || entry.name.includes('.jpg') || entry.name.includes('.png'))) {
+        imageSeenCount++;
+        console.log('Song image load #' + imageSeenCount + ' for', songId);
+        // Second image load = song looped = first play completed
+        if(imageSeenCount >= 2){
           window._perfObserver.disconnect();
-          console.log('Song complete — advancing after ' + elapsed.toFixed(0) + 's');
+          console.log('Song complete (loop detected) — advancing');
           setTimeout(function(){
             if(activeTrack < dealt.length - 1){
               activeTrack++;
               renderAlbum();
             }
-          }, 800);
+          }, 300);
         }
+      }
+      // Also catch milestones as backup
+      if(entry.name && entry.name.includes(songId) && entry.name.includes('listen_milestone')) {
+        milestoneCount++;
+        console.log('listen_milestone #' + milestoneCount);
       }
     });
   });
