@@ -181,31 +181,40 @@ window.addEventListener('message', function(e){
 // When Suno's listen_milestone fires for the current song, we advance
 function watchForSongEnd(songId) {
   if(window._perfObserver) window._perfObserver.disconnect();
-  let imageSeenCount = 0;
   let milestoneCount = 0;
+  let imageSeenCount = 0;
+  const startTime = Date.now();
   window._perfObserver = new PerformanceObserver(function(list) {
     list.getEntries().forEach(function(entry) {
-      // Watch for the song's cover image reloading — happens when song loops
-      if(entry.name && entry.name.includes(songId) && 
-         (entry.name.includes('.jpeg') || entry.name.includes('.jpg') || entry.name.includes('.png'))) {
-        imageSeenCount++;
-        console.log('Song image load #' + imageSeenCount + ' for', songId);
-        // Second image load = song looped = first play completed
-        if(imageSeenCount >= 2){
+      const url = entry.name || '';
+      const elapsed = (Date.now() - startTime) / 1000;
+
+      // Count listen_milestone calls — watch for a burst after 60s
+      if(url.includes('listen_milestone')){
+        milestoneCount++;
+        console.log('milestone #' + milestoneCount + ' at ' + elapsed.toFixed(0) + 's');
+        // 5+ milestones AND at least 60s elapsed = song completed
+        if(milestoneCount >= 5 && elapsed > 60){
           window._perfObserver.disconnect();
-          console.log('Song complete (loop detected) — advancing');
+          console.log('ADVANCE: milestone threshold reached at ' + elapsed.toFixed(0) + 's');
           setTimeout(function(){
-            if(activeTrack < dealt.length - 1){
-              activeTrack++;
-              renderAlbum();
-            }
-          }, 300);
+            if(activeTrack < dealt.length - 1){ activeTrack++; renderAlbum(); }
+          }, 500);
         }
       }
-      // Also catch milestones as backup
-      if(entry.name && entry.name.includes(songId) && entry.name.includes('listen_milestone')) {
-        milestoneCount++;
-        console.log('listen_milestone #' + milestoneCount);
+
+      // Watch for cover image loading a second time (loop = completion)
+      // Image URL contains "image_" but different UUID from song ID
+      if(url.includes('image_') && (url.endsWith('.jpeg') || url.endsWith('.jpg'))){
+        imageSeenCount++;
+        console.log('image load #' + imageSeenCount + ' at ' + elapsed.toFixed(0) + 's');
+        if(imageSeenCount >= 3 && elapsed > 60){
+          window._perfObserver.disconnect();
+          console.log('ADVANCE: image reload detected at ' + elapsed.toFixed(0) + 's');
+          setTimeout(function(){
+            if(activeTrack < dealt.length - 1){ activeTrack++; renderAlbum(); }
+          }, 500);
+        }
       }
     });
   });
