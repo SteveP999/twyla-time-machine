@@ -190,15 +190,17 @@ function watchForSongEnd(songId) {
   _watchImages = 0;
   _watchStart = Date.now();
   _watchAdvanced = false;
-  console.log('Watching for end of:', songId);
+  console.log('Watching:', songId.substring(0,8), 'track', activeTrack);
 }
 
 function advanceTrack() {
   if(_watchAdvanced) return;
   _watchAdvanced = true;
-  console.log('ADVANCE triggered');
+  _watchSongId = null; // stop observing until next track loads
+  const nextTrack = activeTrack + 1;
+  console.log('ADVANCE from track', activeTrack, 'to', nextTrack);
   setTimeout(function(){
-    if(activeTrack < dealt.length - 1){ activeTrack++; renderAlbum(); }
+    if(nextTrack < dealt.length){ activeTrack = nextTrack; renderAlbum(); }
   }, 500);
 }
 
