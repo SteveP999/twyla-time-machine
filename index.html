@@ -204,6 +204,24 @@ window.addEventListener('message', function(e){
     if(ov) ov.style.display='flex';
   }
 });
+
+// Register service worker to intercept Suno's listen_milestone "completed" signal
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/twyla-time-machine/sw.js', {scope: '/twyla-time-machine/'})
+    .then(function(reg){ console.log('SW registered:', reg.scope); })
+    .catch(function(err){ console.log('SW failed:', err); });
+  
+  navigator.serviceWorker.addEventListener('message', function(e){
+    console.log('SW message:', e.data);
+    if(e.data && e.data.type === 'SUNO_SONG_COMPLETE'){
+      if(window._ttmPoll) clearInterval(window._ttmPoll);
+      if(activeTrack < dealt.length - 1){
+        activeTrack++;
+        renderAlbum();
+      }
+    }
+  });
+}
 </script>
 </body>
 </html>
