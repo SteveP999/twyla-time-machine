@@ -133,7 +133,6 @@ function renderAlbum(){
       </div>
       <div style="position:relative;margin-top:10px">
         <iframe id="sunoFrame" src="${esc(x.record.embedUrl)}&loop=0" title="${esc(x.song)}" allow="autoplay; encrypted-media; fullscreen" allowfullscreen style="width:100%;height:152px;border:0;border-radius:9px;display:block"></iframe>
-        <audio id="ttmShadow" src="https://d2lwuy8qc234o3.cloudfront.net/1/clip/${esc(x.record.songId)}.m4a" preload="metadata" style="display:none"></audio>
         <div id="endOverlay" style="display:none;position:absolute;inset:0;background:rgba(10,6,8,.92);border-radius:9px;flex-direction:column;align-items:center;justify-content:center;gap:10px;cursor:pointer" onclick="if(activeTrack<dealt.length-1){activeTrack++;renderAlbum();}">
           <div style="color:var(--gold);font-size:.7rem;font-weight:900;letter-spacing:.15em;text-transform:uppercase">Song Complete</div>
           <div style="font:400 1.1rem/1 Georgia,serif">Next Track ▶</div>
@@ -150,25 +149,7 @@ function renderAlbum(){
   document.querySelectorAll('.track').forEach(el=>el.onclick=()=>{activeTrack=Number(el.dataset.i);renderAlbum();});
   $('previousTrack').disabled=activeTrack===0;
   $('nextTrack').disabled=activeTrack===dealt.length-1;
-  // Shadow audio: preload=metadata gives us duration, ended event fires at song end
-  if(window._ttmTimer) clearTimeout(window._ttmTimer);
-  const shadow = document.getElementById('ttmShadow');
-  if(shadow){
-    shadow.onended = ()=>{
-      console.log('Shadow ended — advancing');
-      if(activeTrack < dealt.length - 1){ activeTrack++; renderAlbum(); }
-    };
-    shadow.onerror = (e)=>{ console.log('Shadow audio error:', e); };
-    shadow.onloadedmetadata = ()=>{ console.log('Shadow duration:', shadow.duration); };
-    shadow.load();
-    const frame = document.getElementById('sunoFrame');
-    if(frame){
-      let shadowStarted = false;
-      frame.addEventListener('mousedown', ()=>{
-        if(!shadowStarted){ shadowStarted=true; shadow.play().catch(e=>console.log('shadow play err:',e)); }
-      });
-    }
-  }
+  // PerformanceObserver: watches for Suno's listen_milestone "completed" POST
   watchForSongEnd(x.record.songId);
 }
 
@@ -200,13 +181,21 @@ window.addEventListener('message', function(e){
 // When Suno's listen_milestone fires for the current song, we advance
 function watchForSongEnd(songId) {
   if(window._perfObserver) window._perfObserver.disconnect();
+  let milestoneCount = 0;
   window._perfObserver = new PerformanceObserver(function(list) {
     list.getEntries().forEach(function(entry) {
       if(entry.name && entry.name.includes(songId) && entry.name.includes('listen_milestone')) {
-        console.log('Caught listen_milestone for', songId);
-        window._perfObserver.disconnect();
-        if(activeTrack < dealt.length - 1){
-          setTimeout(function(){ activeTrack++; renderAlbum(); }, 500);
+        milestoneCount++;
+        console.log('listen_milestone #' + milestoneCount + ' for', songId);
+        // 4th milestone = "completed" (25%, 50%, 75%, 100%)
+        if(milestoneCount >= 4){
+          window._perfObserver.disconnect();
+          setTimeout(function(){
+            if(activeTrack < dealt.length - 1){
+              activeTrack++;
+              renderAlbum();
+            }
+          }, 800);
         }
       }
     });
