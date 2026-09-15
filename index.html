@@ -182,14 +182,18 @@ window.addEventListener('message', function(e){
 function watchForSongEnd(songId) {
   if(window._perfObserver) window._perfObserver.disconnect();
   let milestoneCount = 0;
+  const startTime = Date.now();
   window._perfObserver = new PerformanceObserver(function(list) {
     list.getEntries().forEach(function(entry) {
       if(entry.name && entry.name.includes(songId) && entry.name.includes('listen_milestone')) {
         milestoneCount++;
-        console.log('listen_milestone #' + milestoneCount + ' for', songId);
-        // 4th milestone = "completed" (25%, 50%, 75%, 100%)
-        if(milestoneCount >= 4){
+        const elapsed = (Date.now() - startTime) / 1000;
+        console.log('listen_milestone #' + milestoneCount + ' at ' + elapsed.toFixed(0) + 's for', songId);
+        // Only treat as "completed" if at least 60 seconds have passed
+        // (avoids false trigger on rapid early milestones)
+        if(milestoneCount >= 4 && elapsed > 60){
           window._perfObserver.disconnect();
+          console.log('Song complete — advancing after ' + elapsed.toFixed(0) + 's');
           setTimeout(function(){
             if(activeTrack < dealt.length - 1){
               activeTrack++;
