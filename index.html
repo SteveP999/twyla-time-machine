@@ -177,49 +177,55 @@ window.addEventListener('message', function(e){
   }
 });
 
-// PerformanceObserver watches ALL network requests including cross-origin iframe traffic
-// When Suno's listen_milestone fires for the current song, we advance
-function watchForSongEnd(songId) {
-  if(window._perfObserver) window._perfObserver.disconnect();
-  let milestoneCount = 0;
-  let imageSeenCount = 0;
-  const startTime = Date.now();
-  window._perfObserver = new PerformanceObserver(function(list) {
-    list.getEntries().forEach(function(entry) {
-      const url = entry.name || '';
-      const elapsed = (Date.now() - startTime) / 1000;
+// Single persistent PerformanceObserver for the whole album session
+let _watchSongId = null;
+let _watchMilestones = 0;
+let _watchImages = 0;
+let _watchStart = 0;
+let _watchAdvanced = false;
 
-      // Count listen_milestone calls — watch for a burst after 60s
+function watchForSongEnd(songId) {
+  _watchSongId = songId;
+  _watchMilestones = 0;
+  _watchImages = 0;
+  _watchStart = Date.now();
+  _watchAdvanced = false;
+  console.log('Watching for end of:', songId);
+}
+
+function advanceTrack() {
+  if(_watchAdvanced) return;
+  _watchAdvanced = true;
+  console.log('ADVANCE triggered');
+  setTimeout(function(){
+    if(activeTrack < dealt.length - 1){ activeTrack++; renderAlbum(); }
+  }, 500);
+}
+
+// Start the observer once — never disconnect it
+(function startObserver(){
+  if(!window.PerformanceObserver) return;
+  new PerformanceObserver(function(list) {
+    list.getEntries().forEach(function(entry) {
+      if(!_watchSongId) return;
+      const url = entry.name || '';
+      const elapsed = (Date.now() - _watchStart) / 1000;
+
       if(url.includes('listen_milestone')){
-        milestoneCount++;
-        console.log('milestone #' + milestoneCount + ' at ' + elapsed.toFixed(0) + 's');
-        // 5+ milestones AND at least 60s elapsed = song completed
-        if(milestoneCount >= 5 && elapsed > 60){
-          window._perfObserver.disconnect();
-          console.log('ADVANCE: milestone threshold reached at ' + elapsed.toFixed(0) + 's');
-          setTimeout(function(){
-            if(activeTrack < dealt.length - 1){ activeTrack++; renderAlbum(); }
-          }, 500);
-        }
+        _watchMilestones++;
+        console.log('milestone #' + _watchMilestones + ' at ' + elapsed.toFixed(0) + 's');
+        if(_watchMilestones >= 5 && elapsed > 60) advanceTrack();
       }
 
-      // Watch for cover image loading a second time (loop = completion)
-      // Image URL contains "image_" but different UUID from song ID
       if(url.includes('image_') && (url.endsWith('.jpeg') || url.endsWith('.jpg'))){
-        imageSeenCount++;
-        console.log('image load #' + imageSeenCount + ' at ' + elapsed.toFixed(0) + 's');
-        if(imageSeenCount >= 3 && elapsed > 60){
-          window._perfObserver.disconnect();
-          console.log('ADVANCE: image reload detected at ' + elapsed.toFixed(0) + 's');
-          setTimeout(function(){
-            if(activeTrack < dealt.length - 1){ activeTrack++; renderAlbum(); }
-          }, 500);
-        }
+        _watchImages++;
+        console.log('image #' + _watchImages + ' at ' + elapsed.toFixed(0) + 's');
+        if(_watchImages >= 3 && elapsed > 60) advanceTrack();
       }
     });
-  });
-  window._perfObserver.observe({ entryTypes: ['resource'] });
-}
+  }).observe({ entryTypes: ['resource'] });
+  console.log('PerformanceObserver started');
+})();
 </script>
 </body>
 </html>
